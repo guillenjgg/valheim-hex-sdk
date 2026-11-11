@@ -19,8 +19,8 @@ namespace HexValheimSdk.Configuration
     /// </para>
     /// <para>
     /// Reloading updates configuration entries; the consuming mod applies their gameplay effects.
-    /// Reload failures are logged without automatic retries. This class does not perform configuration
-    /// migrations or save the configuration file.
+    /// Reload failures are logged without automatic retries. An optional migration plan can upgrade
+    /// saved values during reload; only successful schema upgrades save the configuration file.
     /// </para>
     /// </remarks>
     public sealed class ConfigFileWatcher : IDisposable
@@ -32,8 +32,16 @@ namespace HexValheimSdk.Configuration
         private readonly Stopwatch _timeSinceChange = new Stopwatch();
         private readonly object _syncRoot = new object();
         private readonly int _reloadDelayMilliseconds;
+        private readonly ConfigMigrationPlan _migrations;
         private bool _reloadPending;
         private bool _disposed;
+
+        /// <summary>Occurs on the main thread after a successful watcher-initiated reload.</summary>
+        /// <remarks>
+        /// Not raised for direct Configuration Manager edits. Subscriber exceptions are logged separately
+        /// and do not prevent other subscribers from running. Dispose clears subscriptions.
+        /// </remarks>
+        public event EventHandler Reloaded;
 
         /// <summary>
         /// Starts watching the supplied configuration file for changes, creation, and renaming.
@@ -56,6 +64,18 @@ namespace HexValheimSdk.Configuration
         /// Each new file notification restarts the wait before reloading.
         /// </remarks>
         public ConfigFileWatcher(ConfigFile configFile, ManualLogSource manualLogSource, int reloadDelayMilliseconds = 500)
+            : this(configFile, manualLogSource, reloadDelayMilliseconds, null)
+        {
+        }
+
+        /// <summary>Starts watching with an optional migration plan for external file reloads.</summary>
+        /// <param name="configFile">The mod's initialized configuration file.</param>
+        /// <param name="manualLogSource">The mod's logger.</param>
+        /// <param name="reloadDelayMilliseconds">Positive quiet period in milliseconds.</param>
+        /// <param name="migrations">The plan used during initialization, or null for ordinary reloads.</param>
+        /// <remarks>Has the same lifecycle and argument validation as the simpler constructor.</remarks>
+        public ConfigFileWatcher(ConfigFile configFile, ManualLogSource manualLogSource,
+            int reloadDelayMilliseconds, ConfigMigrationPlan migrations)
         {
             _configFile = configFile ?? throw new ArgumentNullException(nameof(configFile));
             _manualLogSource = manualLogSource ?? throw new ArgumentNullException(nameof(manualLogSource));
@@ -66,6 +86,7 @@ namespace HexValheimSdk.Configuration
             }
 
             _reloadDelayMilliseconds = reloadDelayMilliseconds;
+            _migrations = migrations;
 
             string directory = Path.GetDirectoryName(_configFile.ConfigFilePath);
             string fileName = Path.GetFileName(_configFile.ConfigFilePath);
@@ -136,11 +157,42 @@ namespace HexValheimSdk.Configuration
                 {
                     _manualLogSource.LogDebug("Reloading configuration: " + _configFile.ConfigFilePath);
 
-                    _configFile.Reload();
+                    if (_migrations == null)
+                    {
+                        _configFile.Reload();
+                    }
+                    else
+                    {
+                        _migrations.Reload(_configFile);
+                    }
                 }
                 catch (Exception exception)
                 {
                     _manualLogSource.LogError("Could not reload configuration: " + exception);
+
+                    return;
+                }
+
+                EventHandler handlers = Reloaded;
+
+                if (handlers != null)
+                {
+                    foreach (EventHandler handler in handlers.GetInvocationList())
+                    {
+                        if (_disposed)
+                        {
+                            break;
+                        }
+
+                        try
+                        {
+                            handler(this, EventArgs.Empty);
+                        }
+                        catch (Exception exception)
+                        {
+                            _manualLogSource.LogError("A configuration reload subscriber failed: " + exception);
+                        }
+                    }
                 }
             }
         }
@@ -163,6 +215,7 @@ namespace HexValheimSdk.Configuration
 
                 _disposed = true;
                 _reloadPending = false;
+                Reloaded = null;
 
                 _reloadTimer.Stop();
                 _reloadTimer.Elapsed -= OnReloadTimerElapsed;

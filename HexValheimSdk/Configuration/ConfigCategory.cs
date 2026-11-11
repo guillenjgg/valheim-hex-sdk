@@ -75,6 +75,21 @@ namespace HexValheimSdk.Configuration
         /// </remarks>
         public ConfigEntry<T> Bind<T>(string key, T defaultValue, string description, AcceptableValueBase acceptableValues = null)
         {
+            return Bind(key, defaultValue, description, acceptableValues, null);
+        }
+
+        /// <summary>Binds a setting with custom display metadata and automatic ordering unless explicitly overridden.</summary>
+        /// <typeparam name="T">The BepInEx-supported value type.</typeparam>
+        /// <param name="key">The setting key.</param>
+        /// <param name="defaultValue">The value used when no saved value exists.</param>
+        /// <param name="description">Player-facing description.</param>
+        /// <param name="acceptableValues">Optional range or list; pass null for none.</param>
+        /// <param name="attributes">Optional display metadata. A copy is tagged, leaving this instance unchanged.</param>
+        /// <returns>The bound configuration entry.</returns>
+        /// <remarks>Uses the same validation and binding rules as the simpler Bind overload.</remarks>
+        public ConfigEntry<T> Bind<T>(string key, T defaultValue, string description,
+            AcceptableValueBase acceptableValues, ConfigurationManagerAttributes attributes)
+        {
             if (_nextOrder < int.MinValue)
             {
                 throw new InvalidOperationException("No configuration display priorities remain in this category.");
@@ -83,7 +98,7 @@ namespace HexValheimSdk.Configuration
             var metadata = new ConfigDescription(
                 description,
                 acceptableValues,
-                new ConfigurationManagerAttributes { Order = (int)_nextOrder });
+                (attributes ?? new ConfigurationManagerAttributes()).WithDefaultOrder((int)_nextOrder));
 
             ConfigEntry<T> entry = _configFile.Bind(Section, key, defaultValue, metadata);
 
