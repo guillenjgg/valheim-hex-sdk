@@ -2,11 +2,13 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net48</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <BepInExAssemblyPath Condition="'$(BepInExAssemblyPath)' == ''">$(MSBuildThisFileDirectory)../../../../bepinex_mod_libs/BepInEx.dll</BepInExAssemblyPath>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../HexValheimSdk/HexValheimSdk.csproj" />
     <Reference Include="BepInEx">
-      <HintPath>../../../../bepinex_mod_libs/BepInEx.dll</HintPath>
+      <HintPath>$(BepInExAssemblyPath)</HintPath>
       <Private>True</Private>
     </Reference>
   </ItemGroup>

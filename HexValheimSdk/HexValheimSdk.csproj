@@ -3,13 +3,21 @@
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <PackageId>HexValheimSdk</PackageId>
+    <Version>0.1.0-alpha.1</Version>
+    <Authors>guillenjgg</Authors>
+    <Description>Reusable configuration helpers for Valheim mods using BepInEx 5.</Description>
+    <PackageTags>Valheim;BepInEx;modding;configuration</PackageTags>
+    <PackageProjectUrl>https://github.com/guillenjgg/valheim-hex-sdk</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/guillenjgg/valheim-hex-sdk</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <IsPackable>true</IsPackable>
   </PropertyGroup>
 
   <ItemGroup>
-    <Reference Include="BepInEx">
-      <HintPath>..\..\..\bepinex_mod_libs\BepInEx.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
+    <PackageReference Include="BepInEx.BaseLib" Version="5.4.20" PrivateAssets="all" ExcludeAssets="runtime" />
+    <None Include="../README.md" Pack="true" PackagePath="/" />
   </ItemGroup>
 
 </Project>

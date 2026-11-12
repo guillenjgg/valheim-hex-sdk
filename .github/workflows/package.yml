@@ -1,0 +1,92 @@
+name: Build and publish NuGet package
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Verify release version
+        if: github.event_name == 'release'
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          [xml]$project = Get-Content HexValheimSdk/HexValheimSdk.csproj
+          $version = [string]$project.Project.PropertyGroup.Version
+          if ($env:RELEASE_TAG -ne "v$version") {
+            throw "Release tag must match the project version: v$version"
+          }
+
+      - name: Download BepInEx runtime for configuration checks
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force artifacts/runtime | Out-Null
+          Invoke-WebRequest 'https://github.com/BepInEx/BepInEx/releases/download/v5.4.22/BepInEx_x64_5.4.22.0.zip' -OutFile artifacts/runtime/bepinex.zip
+          Expand-Archive artifacts/runtime/bepinex.zip artifacts/runtime/bepinex
+
+      - name: Build configuration checks
+        shell: pwsh
+        run: |
+          $runtime = (Resolve-Path artifacts/runtime/bepinex/BepInEx/core/BepInEx.dll).Path
+          dotnet build tests/ConfigurationChecks/ConfigurationChecks.csproj -c Release "-p:BepInExAssemblyPath=$runtime"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Run configuration checks
+        shell: pwsh
+        run: |
+          & tests/ConfigurationChecks/bin/Release/net48/ConfigurationChecks.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Pack SDK
+        run: dotnet pack HexValheimSdk/HexValheimSdk.csproj -c Release --no-build -o artifacts/packages
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: nuget-package
+          path: artifacts/packages/*.nupkg
+          if-no-files-found: error
+
+  publish:
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'release'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: nuget-package
+          path: artifacts/packages
+
+      - name: Publish to GitHub Packages
+        env:
+          PACKAGE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PACKAGE_OWNER: ${{ github.repository_owner }}
+        run: >-
+          dotnet nuget push "artifacts/packages/*.nupkg"
+          --source "https://nuget.pkg.github.com/${PACKAGE_OWNER}/index.json"
+          --api-key "$PACKAGE_TOKEN"
+          --skip-duplicate

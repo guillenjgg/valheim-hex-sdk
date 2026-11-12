@@ -3,6 +3,14 @@
 A .NET Standard 2.0 library for reusable Valheim mod configuration helpers.
 Consumers still reference BepInEx and their required Unity/game assemblies.
 
+## NuGet distribution
+
+The package ID is `HexValheimSdk`. GitHub Packages setup, authentication, and
+release instructions are in [Publishing and installing the SDK](https://github.com/guillenjgg/valheim-hex-sdk/blob/main/docs/publishing.md).
+GitHub Actions builds the SDK without local game paths and publishes on a manual
+workflow run or a published GitHub release. The package README's relative links
+can also be opened from the source repository.
+
 ## Initialize settings
 
 Bind settings before starting the watcher. Initialization temporarily disables
@@ -132,6 +140,8 @@ dotnet build tests/ConfigurationChecks/ConfigurationChecks.csproj
 & tests/ConfigurationChecks/bin/Debug/net48/ConfigurationChecks.exe
 ```
 
+The SDK builds against BepInEx.BaseLib from the official BepInEx NuGet feed.
+It is a private build dependency and is not redistributed with the SDK.
 The checks use the real BepInEx DLL referenced from the local mod libraries and
 write fixture files inside their build output. They cover initialization,
 metadata, startup/reload migration, precedence, repeat migration, failure
